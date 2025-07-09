@@ -3,31 +3,38 @@ export class Semaphore<T = unknown> {
 	private queue: (() => void)[]
 	private waiters: (() => void)[] = []
 	private max: number
-	private tasks: Promise<T>[]
+	private _tasks: Promise<T>[]
 
 	constructor(concurrencyLimit: number) {
 		this.current = 0
 		this.queue = []
 		this.max = concurrencyLimit
-		this.tasks = []
+		this._tasks = []
 	}
 
 	get progress() {
-		return this.tasks.length - (this.current + this.queue.length)
+		return this._tasks.length - (this.current + this.queue.length)
 	}
 
 	get total() {
-		return this.tasks.length
+		return this._tasks.length
 	}
 
-	get all() {
-		return this.tasks
+	get tasks(): ReadonlyArray<Promise<T>> {
+		return this._tasks
 	}
 
 	collect() {
-		return Promise.all(this.tasks)
+		return Promise.all(this._tasks)
 	}
 
+	/**
+	 * Blocks until a slot is available in the semaphore.
+	 * This is used internally by `enqueue`, but can be used externally if you
+	 * need to manually manage semaphore slots.
+	 *
+	 * @returns A promise that resolves when a slot is acquired.
+	 */
 	async waitForSlot(): Promise<void> {
 		if (this.current < this.max) {
 			this.current++
@@ -39,13 +46,37 @@ export class Semaphore<T = unknown> {
 		})
 	}
 
+	/**
+	 * Enqueues a task and waits for it to start execution.
+	 *
+	 * Use `enqueue` when you need to coordinate your code with the start of a task.
+	 * Calling `await semaphore.enqueue(task)` provides backpressure, pausing execution
+	 * until the semaphore has a free slot and the task has begun running.
+	 *
+	 * It returns a `Promise` that resolves to a function, which in turn returns the
+	 * `Promise` for the task's result.
+	 *
+	 * @param fn The async function to execute.
+	 * @returns A `Promise` that resolves to a function that returns the `Promise` of the task.
+	 */
 	async enqueue(fn: () => Promise<T>): Promise<() => Promise<T>> {
 		await this.waitForSlot()
 		const promise = fn().finally(() => this.release())
-		this.tasks.push(promise)
+		this._tasks.push(promise)
 		return () => promise
 	}
 
+	/**
+	 * Adds a task to the semaphore queue and returns a `Promise` for its result.
+	 *
+	 * Use `run` for a "fire-and-forget" approach. It adds your task to a queue and
+	 * executes it as soon as a slot is available. It immediately returns a `Promise`
+	 * for the task's result. This is useful when you want to dispatch a batch of
+	 * tasks and await their completion later.
+	 *
+	 * @param fn The async function to execute.
+	 * @returns A `Promise` that resolves with the result of the function.
+	 */
 	run(fn: () => Promise<T>): Promise<T> {
 		let resolveOuter: (value: T | PromiseLike<T>) => void
 		let rejectOuter: (reason?: unknown) => void
@@ -53,7 +84,7 @@ export class Semaphore<T = unknown> {
 			resolveOuter = resolve
 			rejectOuter = reject
 		})
-		this.tasks.push(outerPromise)
+		this._tasks.push(outerPromise)
 
 		const runFn = () => {
 			this.current++
