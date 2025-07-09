@@ -1,5 +1,10 @@
 name: CI
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 on:
   push:
     branches:
@@ -62,5 +67,5 @@ jobs:
       - name: Release
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: yarn semantic-release
