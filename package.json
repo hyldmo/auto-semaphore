@@ -1,6 +1,6 @@
 {
   "name": "auto-semaphore",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A simple and powerful semaphore implementation for TypeScript.",
   "author": "Your Name",
   "packageManager": "yarn@4.5.1",
