@@ -47,6 +47,29 @@ export class Semaphore<T = unknown> {
 	}
 
 	/**
+	 * Acquires a semaphore slot and returns a release function.
+	 *
+	 * Use `acquire` when you need manual control over when the slot is released.
+	 * The returned function must be called to free the slot.
+	 *
+	 * @example
+	 * ```ts
+	 * const release = await semaphore.acquire()
+	 * try {
+	 *   await doWork()
+	 * } finally {
+	 *   release()
+	 * }
+	 * ```
+	 *
+	 * @returns A `Promise` that resolves to a release function.
+	 */
+	async acquire(): Promise<() => void> {
+		await this.waitForSlot()
+		return () => this.release()
+	}
+
+	/**
 	 * Enqueues a task and waits for it to start execution.
 	 *
 	 * Use `enqueue` when you need to coordinate your code with the start of a task.
